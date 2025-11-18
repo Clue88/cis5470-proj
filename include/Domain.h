@@ -12,30 +12,30 @@ namespace dataflow {
 //===----------------------------------------------------------------------===//
 
 /*
- * Implement your abstract domain.
+ * Abstract domain.
+ * * `Uninit` - No info (bottom)
+ * * `Live` -  Definitely allocated and not yet freed
+ * * `Freed` - Definitely freed
+ * * `MaybeFreed` - Might be freed, might not (top)
  */
 class Domain {
  public:
   enum Element {
     Uninit,
-    NonZero,
-    Zero,
-    MaybeZero
+    Live,
+    Freed,
+    MaybeFreed
   };
   Domain();
   Domain(Element V);
   Element Value;
 
-  static Domain *add(Domain *E1, Domain *E2);
-  static Domain *sub(Domain *E1, Domain *E2);
-  static Domain *mul(Domain *E1, Domain *E2);
-  static Domain *div(Domain *E1, Domain *E2);
-  static Domain *join(Domain *E1, Domain *E2);
+  static Domain* join(Domain* E1, Domain* E2);
   static bool equal(Domain E1, Domain E2);
-  void print(raw_ostream &O);
+  void print(raw_ostream& O);
 };
 
-raw_ostream &operator<<(raw_ostream &O, Domain V);
+raw_ostream& operator<<(raw_ostream& O, Domain V);
 
 }  // namespace dataflow
 

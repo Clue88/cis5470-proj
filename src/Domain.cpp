@@ -13,77 +13,24 @@ Domain::Domain(Element V) {
   Value = V;
 }
 
-Domain* Domain::add(Domain* E1, Domain* E2) {
-  if (E1->Value == Uninit || E2->Value == Uninit)
-    return new Domain(Uninit);
-  if (E1->Value == Zero && E2->Value == Zero)
-    return new Domain(Zero);
-  if (E1->Value == Zero && E2->Value == NonZero)
-    return new Domain(NonZero);
-  if (E1->Value == NonZero && E2->Value == Zero)
-    return new Domain(NonZero);
-  return new Domain(MaybeZero);
-}
-
-Domain* Domain::sub(Domain* E1, Domain* E2) {
-  if (E1->Value == Uninit || E2->Value == Uninit)
-    return new Domain(Uninit);
-  if (E1->Value == Zero && E2->Value == Zero)
-    return new Domain(Zero);
-  if (E1->Value == Zero && E2->Value == NonZero)
-    return new Domain(NonZero);
-  if (E1->Value == NonZero && E2->Value == Zero)
-    return new Domain(NonZero);
-  return new Domain(MaybeZero);
-}
-
-Domain* Domain::mul(Domain* E1, Domain* E2) {
-  if (E1->Value == Uninit || E2->Value == Uninit)
-    return new Domain(Uninit);
-  if (E1->Value == Zero || E2->Value == Zero)
-    return new Domain(Zero);
-  if (E1->Value == NonZero && E2->Value == NonZero)
-    return new Domain(NonZero);
-  return new Domain(MaybeZero);
-}
-
-Domain* Domain::div(Domain* E1, Domain* E2) {
-  if (E1->Value == Uninit || E2->Value == Uninit)
-    return new Domain(Uninit);
-  if (E2->Value == Zero || E2->Value == MaybeZero)
-    return new Domain(Uninit);
-  if (E1->Value == NonZero)
-    return new Domain(MaybeZero);
-  if (E1->Value == Zero)
-    return new Domain(Zero);
-  return new Domain(MaybeZero);
-}
-
 Domain* Domain::join(Domain* E1, Domain* E2) {
-  switch (E1->Value) {
-    case Uninit:
-      return new Domain(*E2);
-    case NonZero:
-      switch (E2->Value) {
-        case Uninit:
-        case NonZero:
-          return new Domain(NonZero);
-        case Zero:
-        case MaybeZero:
-          return new Domain(MaybeZero);
-      }
-    case Zero:
-      switch (E2->Value) {
-        case Uninit:
-        case Zero:
-          return new Domain(Zero);
-        case NonZero:
-        case MaybeZero:
-          return new Domain(MaybeZero);
-      }
-    case MaybeZero:
-      return new Domain(MaybeZero);
+  using E = Domain::Element;
+  if (E1->Value == E::Uninit) {
+    return new Domain(E2->Value);
   }
+  if (E2->Value == E::Uninit) {
+    return new Domain(E1->Value);
+  }
+  if (E1->Value == E::MaybeFreed || E2->Value == E::MaybeFreed) {
+    return new Domain(E::MaybeFreed);
+  }
+  if (E1->Value == E::Live && E2->Value == E::Live) {
+    return new Domain(E::Live);
+  }
+  if (E1->Value == E::Freed && E2->Value == E::Freed) {
+    return new Domain(E::Freed);
+  }
+  return new Domain(E::MaybeFreed);
 }
 
 bool Domain::equal(Domain E1, Domain E2) {
@@ -93,16 +40,16 @@ bool Domain::equal(Domain E1, Domain E2) {
 void Domain::print(raw_ostream& O) {
   switch (Value) {
     case Uninit:
-      O << "Uninit   ";
+      O << "Uninit    ";
       break;
-    case NonZero:
-      O << "NonZero  ";
+    case Live:
+      O << "Live      ";
       break;
-    case Zero:
-      O << "Zero     ";
+    case Freed:
+      O << "Freed     ";
       break;
-    case MaybeZero:
-      O << "MaybeZero";
+    case MaybeFreed:
+      O << "MaybeFreed";
       break;
   }
 }
