@@ -4,46 +4,47 @@
 namespace dataflow {
 
 /**
- * @brief Is the given instruction a user input?
+ * @brief Extract the underlying slot being freed.
  *
- * @param Inst The instruction to check.
- * @return true If it is a user input, false otherwise.
+ * A `free` call in LLVM IR rarely receives the original pointer variable
+ * directly — it is usually passed something like:
+ *
+ *     %raw    = load i32*, i32** %p
+ *     %cast   = bitcast i32* %raw to i8*
+ *     call void @free(i8* %cast)
+ *
+ * In this example, the *real* object we want to update in the abstract
+ * memory is `%p`, not `%cast` or `%raw`.
+ *
+ * This helper walks backward through bitcasts and GEPs to recover the
+ * original value, and if that value is a `load`, returns its pointer
+ * operand (the slot being loaded from).
+ *
+ * Returns:
+ *   - The Value* representing the storage location (e.g. `%p`) whose
+ *     abstract freedness state should be updated after a `free`.
+ *   - `nullptr` if no such slot can be determined.
  */
-bool isInput(Instruction* Inst) {
-  if (auto Call = dyn_cast<CallInst>(Inst)) {
-    if (auto Fun = Call->getCalledFunction()) {
-      return (Fun->getName().equals("getchar") || Fun->getName().equals("fgetc"));
+static Value* getFreeBaseSlot(Value* V) {
+  // Strip bitcasts and GEPs
+  while (true) {
+    if (auto* BC = dyn_cast<BitCastInst>(V)) {
+      V = BC->getOperand(0);
+      continue;
     }
+    if (auto* GEP = dyn_cast<GetElementPtrInst>(V)) {
+      V = GEP->getPointerOperand();
+      continue;
+    }
+    break;
   }
-  return false;
-}
 
-/**
- * @brief Is the given call instruction alloc-like?
- * 
- * @param Call The call instruction to check.
- * @return true if it is alloc-like, i.e., `malloc`, `calloc`, etc., false otherwise.
- */
-static bool isAllocLike(CallInst* Call) {
-  if (auto* Fun = Call->getCalledFunction()) {
-    auto Name = Fun->getName();
-    return Name.equals("malloc") || Name.equals("calloc") || Name.equals("realloc");
+  // If we now have a load, its pointer operand is the slot
+  if (auto* L = dyn_cast<LoadInst>(V)) {
+    return L->getPointerOperand();  // e.g. %p
   }
-  return false;
-}
 
-/**
- * @brief Is the given call instruction free-like?
- * 
- * @param Call The call instruction to check.
- * @return true if it is free-like, i.e., `free` or some other variant, false otherwise.
- */
-static bool isFreeLike(CallInst* Call) {
-  if (auto* Fun = Call->getCalledFunction()) {
-    auto Name = Fun->getName();
-    return Name.equals("free");
-  }
-  return false;
+  return nullptr;
 }
 
 /**
@@ -83,55 +84,37 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
     NOut[kv.first] = new Domain(kv.second->Value);
   }
 
-  // We only care about pointer-typed values
-  auto updatePtr = [&](Value* V, Domain::Element E) {
-    if (!V->getType()->isPointerTy()) {
-      return;
-    }
-    NOut[variable(V)] = new Domain(E);
-  };
-
   if (auto* Call = dyn_cast<CallInst>(Inst)) {
-    // --- Allocation ---
-    if (isAllocLike(Call)) {
-      if (Call->getType()->isPointerTy()) {
-        updatePtr(Call, Domain::Live);
-      }
-      return;
-    }
+    if (Call->getCalledFunction()) {
+      auto Name = Call->getCalledFunction()->getName();
 
-    // --- Free ---
-    if (isFreeLike(Call)) {
-      if (Call->arg_size() < 1) {
+      // malloc-like: mark result Live
+      if (Name.equals("malloc") || Name.equals("calloc") || Name.equals("realloc")) {
+        if (Call->getType()->isPointerTy()) {
+          NOut[variable(Call)] = new Domain(Domain::Live);
+        }
         return;
       }
-      Value* Ptr = Call->getArgOperand(0);
-      Domain* Before = getOrExtract(In, Ptr);
 
-      // If domain is Uninit, treat as Freed.
-      Domain::Element NewState;
-      switch (Before->Value) {
-        case Domain::Uninit:
-          NewState = Domain::Freed;
-          break;
-        case Domain::Live:
-          NewState = Domain::Freed;
-          break;
-        case Domain::Freed:
-          NewState = Domain::Freed;
-          break;
-        case Domain::MaybeFreed:
-          NewState = Domain::MaybeFreed;
-          break;
+      // free-like: mark the slot Freed
+      if (Name.equals("free")) {
+        if (Call->arg_size() >= 1) {
+          Value* Arg = Call->getArgOperand(0);
+
+          NOut[variable(Arg)] = new Domain(Domain::Freed);
+
+          // Try to find the base slot (like %p) and mark it Freed too
+          if (Value* Slot = getFreeBaseSlot(Arg)) {
+            NOut[variable(Slot)] = new Domain(Domain::Freed);
+          }
+        }
+        return;
       }
-
-      updatePtr(Ptr, NewState);
-      return;
     }
 
-    // Other calls that return pointers update to MaybeFreed
+    // Set domain for other calls to Uninit
     if (Call->getType()->isPointerTy()) {
-      updatePtr(Call, Domain::MaybeFreed);
+      NOut[variable(Call)] = new Domain(Domain::Uninit);
     }
     return;
   }
@@ -158,15 +141,26 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
   }
 
   if (auto* Load = dyn_cast<LoadInst>(Inst)) {
-    if (Load->getType()->isPointerTy()) {
-      // Take freedness of the memory we load from
-      NOut[variable(Load)] = evalCopyLike(Load->getPointerOperand(), In);
+    Value* Ptr = Load->getPointerOperand();
+
+    if (!Load->getType()->isPointerTy()) {
+      return;
     }
+
+    NOut[variable(Load)] = getOrExtract(In, Ptr);
   }
 
   if (auto* Store = dyn_cast<StoreInst>(Inst)) {
-    // Ignore stores for now
-    return;
+    Value* Val = Store->getValueOperand();
+    Value* Ptr = Store->getPointerOperand();
+
+    if (!Val->getType()->isPointerTy()) {
+      return;
+    }
+
+    // Store the domain of the value into the pointer slot
+    Domain* DVal = getOrExtract(In, Val);
+    NOut[variable(Ptr)] = new Domain(DVal->Value);
   }
 }
 
