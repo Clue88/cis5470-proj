@@ -8,14 +8,16 @@ namespace dataflow {
 
 void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
   if (AllocaInst* Alloca = dyn_cast<AllocaInst>(Inst)) {
-    std::string Pointer = variable(Alloca);
     PointsToSet& S = PointsTo[variable(Alloca)];
     S.insert(address(Alloca));
+
   } else if (StoreInst* Store = dyn_cast<StoreInst>(Inst)) {
     if (!Store->getValueOperand()->getType()->isPointerTy())
       return;
+
     Value* Pointer = Store->getPointerOperand();
     Value* Value = Store->getValueOperand();
+
     PointsToSet& L = PointsTo[variable(Pointer)];
     PointsToSet& R = PointsTo[variable(Value)];
     for (auto& I : L) {
@@ -25,11 +27,14 @@ void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
           S.begin(), S.end(), R.begin(), R.end(), std::inserter(Result, Result.begin()));
       PointsTo[I] = Result;
     }
+
   } else if (LoadInst* Load = dyn_cast<LoadInst>(Inst)) {
-    if (!Load->getType()->isPointerTy())
+    if (!Load->getType()->isPointerTy()) {
       return;
-    std::string Variable = variable(Load->getPointerOperand());
-    PointsToSet& R = PointsTo[Variable];
+    }
+
+    std::string VariableName = variable(Load->getPointerOperand());
+    PointsToSet& R = PointsTo[VariableName];
     PointsToSet Result;
     for (auto& I : R) {
       PointsToSet& S = PointsTo[I];
@@ -40,6 +45,42 @@ void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
           std::inserter(Result, Result.begin()));
     }
     PointsTo[variable(Load)] = Result;
+
+  } else if (auto* Call = dyn_cast<CallInst>(Inst)) {
+    if (Call->getType()->isPointerTy()) {
+      PointsToSet& S = PointsTo[variable(Call)];
+      S.insert(address(Call));
+    }
+
+  } else if (auto* Cast = dyn_cast<CastInst>(Inst)) {
+    if (Cast->getType()->isPointerTy() && Cast->getOperand(0)->getType()->isPointerTy()) {
+      PointsTo[variable(Cast)] = PointsTo[variable(Cast->getOperand(0))];
+    }
+
+  } else if (auto* GEP = dyn_cast<GetElementPtrInst>(Inst)) {
+    if (GEP->getType()->isPointerTy()) {
+      PointsTo[variable(GEP)] = PointsTo[variable(GEP->getPointerOperand())];
+    }
+
+  } else if (auto* Phi = dyn_cast<PHINode>(Inst)) {
+    if (!Phi->getType()->isPointerTy()) {
+      return;
+    }
+
+    PointsToSet Result;
+    for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
+      Value* Incoming = Phi->getIncomingValue(i);
+      if (!Incoming->getType()->isPointerTy()) {
+        continue;
+      }
+      PointsToSet& S = PointsTo[variable(Incoming)];
+      std::set_union(S.begin(),
+          S.end(),
+          Result.begin(),
+          Result.end(),
+          std::inserter(Result, Result.begin()));
+    }
+    PointsTo[variable(Phi)] = Result;
   }
 }
 
@@ -65,6 +106,13 @@ void PointerAnalysis::print(std::map<std::string, PointsToSet>& PointsTo) {
 PointerAnalysis::PointerAnalysis(Function& F) {
   int NumOfOldFacts = 0;
   int NumOfNewFacts = 0;
+
+  for (auto& Arg : F.args()) {
+    if (Arg.getType()->isPointerTy()) {
+      PointsToSet& S = PointsTo[variable(&Arg)];
+      S.insert(address(&Arg));
+    }
+  }
 
   while (true) {
     for (inst_iterator Iter = inst_begin(F), E = inst_end(F); Iter != E; ++Iter) {

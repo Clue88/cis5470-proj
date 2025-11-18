@@ -4,47 +4,16 @@
 namespace dataflow {
 
 /**
- * @brief Extract the underlying slot being freed.
- *
- * A `free` call in LLVM IR rarely receives the original pointer variable
- * directly — it is usually passed something like:
- *
- *     %raw    = load i32*, i32** %p
- *     %cast   = bitcast i32* %raw to i8*
- *     call void @free(i8* %cast)
- *
- * In this example, the *real* object we want to update in the abstract
- * memory is `%p`, not `%cast` or `%raw`.
- *
- * This helper walks backward through bitcasts and GEPs to recover the
- * original value, and if that value is a `load`, returns its pointer
- * operand (the slot being loaded from).
- *
- * Returns:
- *   - The Value* representing the storage location (e.g. `%p`) whose
- *     abstract freedness state should be updated after a `free`.
- *   - `nullptr` if no such slot can be determined.
+ * @brief Update the abstract state for a variable by joining with the new value.
  */
-static Value* getFreeBaseSlot(Value* V) {
-  // Strip bitcasts and GEPs
-  while (true) {
-    if (auto* BC = dyn_cast<BitCastInst>(V)) {
-      V = BC->getOperand(0);
-      continue;
-    }
-    if (auto* GEP = dyn_cast<GetElementPtrInst>(V)) {
-      V = GEP->getPointerOperand();
-      continue;
-    }
-    break;
+static void updateDomain(Memory& NOut, const std::string& Name, Domain* NewDom) {
+  auto It = NOut.find(Name);
+  if (It == NOut.end()) {
+    NOut[Name] = new Domain(NewDom->Value);
+  } else {
+    Domain* Joined = Domain::join(It->second, NewDom);
+    It->second = Joined;
   }
-
-  // If we now have a load, its pointer operand is the slot
-  if (auto* L = dyn_cast<LoadInst>(V)) {
-    return L->getPointerOperand();  // e.g. %p
-  }
-
-  return nullptr;
 }
 
 /**
@@ -100,16 +69,27 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
       if (Name.equals("free")) {
         if (Call->arg_size() >= 1) {
           Value* Arg = Call->getArgOperand(0);
+          std::string argName = variable(Arg);
 
           NOut[variable(Arg)] = new Domain(Domain::Freed);
 
-          // Try to find the base slot (like %p) and mark it Freed too
-          if (Value* Slot = getFreeBaseSlot(Arg)) {
-            NOut[variable(Slot)] = new Domain(Domain::Freed);
+          for (Value* V : PointerSet) {
+            if (!V->getType()->isPointerTy()) {
+              continue;
+            }
+
+            std::string vName = variable(V);
+            if (vName == argName) {
+              continue;
+            }
+
+            if (PA->alias(argName, vName)) {
+              NOut[vName] = new Domain(Domain::Freed);
+            }
           }
         }
-        return;
       }
+      return;
     }
 
     // Set domain for other calls to Uninit
@@ -122,7 +102,8 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
   // --- Phi nodes ---
   if (auto* Phi = dyn_cast<PHINode>(Inst)) {
     if (Phi->getType()->isPointerTy()) {
-      NOut[variable(Phi)] = evalCopyLike(Phi, In);
+      Domain* D = evalCopyLike(Phi, In);
+      updateDomain(NOut, variable(Phi), D);
     }
     return;
   }
@@ -130,13 +111,17 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
   // --- Pointer-copying instructions ---
   if (auto* Cast = dyn_cast<CastInst>(Inst)) {
     if (Cast->getType()->isPointerTy() || Cast->getOperand(0)->getType()->isPointerTy()) {
-      NOut[variable(Cast)] = evalCopyLike(Cast, In);
+      Domain* D = evalCopyLike(Cast, In);
+      updateDomain(NOut, variable(Cast), D);
     }
     return;
   }
 
   if (auto* GEP = dyn_cast<GetElementPtrInst>(Inst)) {
-    NOut[variable(GEP)] = evalCopyLike(GEP, In);
+    if (GEP->getType()->isPointerTy()) {
+      Domain* D = evalCopyLike(GEP, In);
+      updateDomain(NOut, variable(GEP), D);
+    }
     return;
   }
 
@@ -147,7 +132,9 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
       return;
     }
 
-    NOut[variable(Load)] = getOrExtract(In, Ptr);
+    Domain* D = getOrExtract(In, Ptr);
+    updateDomain(NOut, variable(Load), D);
+    return;
   }
 
   if (auto* Store = dyn_cast<StoreInst>(Inst)) {
@@ -158,9 +145,9 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
       return;
     }
 
-    // Store the domain of the value into the pointer slot
     Domain* DVal = getOrExtract(In, Val);
-    NOut[variable(Ptr)] = new Domain(DVal->Value);
+    updateDomain(NOut, variable(Ptr), DVal);
+    return;
   }
 }
 

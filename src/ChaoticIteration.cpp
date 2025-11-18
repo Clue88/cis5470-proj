@@ -218,6 +218,12 @@ void DoubleFreeAnalysis::doAnalysis(Function& F, PointerAnalysis* PA) {
    *   OutMap and add all successors to WorkSet.
    */
 
+  for (auto& Arg : F.args()) {
+    if (Arg.getType()->isPointerTy()) {
+      PointerSet.insert(&Arg);
+    }
+  }
+
   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
     WorkSet.insert(&(*I));
     PointerSet.insert(&(*I));
