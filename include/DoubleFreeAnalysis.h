@@ -20,7 +20,7 @@ namespace dataflow {
 
 using Memory = std::map<std::string, Domain*>;
 
-struct DivZeroAnalysis : public PassInfoMixin<DivZeroAnalysis> {
+struct DoubleFreeAnalysis : public PassInfoMixin<DoubleFreeAnalysis> {
   static char ID;
   std::map<Instruction*, Memory*> InMap;
   std::map<Instruction*, Memory*> OutMap;
@@ -82,7 +82,7 @@ struct DivZeroAnalysis : public PassInfoMixin<DivZeroAnalysis> {
   bool check(Instruction* Inst);
 
   std::string getAnalysisName() {
-    return "DivZero";
+    return "DoubleFree";
   }
 };
 }  // namespace dataflow

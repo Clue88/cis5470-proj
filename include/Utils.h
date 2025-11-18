@@ -1,11 +1,11 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include "DivZeroAnalysis.h"
+#include "DoubleFreeAnalysis.h"
 
 #include <map>
 
-extern const char *WHITESPACES;
+extern const char* WHITESPACES;
 
 namespace dataflow {
 
@@ -15,7 +15,7 @@ namespace dataflow {
  * @param Val The llvm Value to get the string representation of
  * @return std::string The string representation of Val.
  */
-std::string variable(const Value *Val);
+std::string variable(const Value* Val);
 
 /**
  * @brief Encode the memory address of an llvm Value
@@ -23,7 +23,7 @@ std::string variable(const Value *Val);
  * @param Val The llvm Value to get the encoding of
  * @return std::string The encoded memory address of Val
  */
-std::string address(const Value *Val);
+std::string address(const Value* Val);
 
 /**
  * @brief Try to extract the Domain of a value.
@@ -34,7 +34,7 @@ std::string address(const Value *Val);
  * @return Domain::Element Domain of Val, or Domain::Uninit if
  *  Val is not a ConstantInt.
  */
-Domain::Element extractFromValue(const Value *Val);
+Domain::Element extractFromValue(const Value* Val);
 
 /**
  * @brief Get the Domain of Val from Memory Or try Extracting it.
@@ -43,7 +43,7 @@ Domain::Element extractFromValue(const Value *Val);
  * @param Val Value whose domain is to be extracted from Mem.
  * @return Domain* Domain of Val in Mem
  */
-Domain *getOrExtract(const Memory *Mem, const Value *Val);
+Domain* getOrExtract(const Memory* Mem, const Value* Val);
 
 /**
  * @brief Print the Memorm Mem in a human readable format to stderr.
@@ -55,7 +55,7 @@ Domain *getOrExtract(const Memory *Mem, const Value *Val);
  *
  * @param Mem Memory to print
  */
-void printMemory(const Memory *Mem);
+void printMemory(const Memory* Mem);
 
 /**
  * @brief Print the Before and After domains of an instruction
@@ -69,7 +69,7 @@ void printMemory(const Memory *Mem);
  * @param OutMem The outgoing memory.
  */
 void printInstructionTransfer(
-    Instruction *Inst, const Memory *InMem, const Memory *OutMem);
+    Instruction* Inst, const Memory* InMem, const Memory* OutMem);
 
 /**
  * @brief Print the In and Out memory of every instruction in function F to
@@ -83,9 +83,9 @@ void printInstructionTransfer(
  * @param OutMap Map of Out memory of every instruction in function F.
  */
 
-void printMap(Function &F,
-    std::map<Instruction *, Memory *> &InMap,
-    std::map<Instruction *, Memory *> &OutMap);
+void printMap(Function& F,
+    std::map<Instruction*, Memory*>& InMap,
+    std::map<Instruction*, Memory*>& OutMap);
 
 }  // namespace dataflow
 

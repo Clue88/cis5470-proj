@@ -1,4 +1,4 @@
-#include "DivZeroAnalysis.h"
+#include "DoubleFreeAnalysis.h"
 
 #include "Utils.h"
 #include <llvm/Passes/PassPlugin.h>
@@ -23,7 +23,7 @@ namespace dataflow {
  * 5. Implement "equal" to compare two Memory objects.
  */
 
-bool DivZeroAnalysis::check(Instruction* Inst) {
+bool DoubleFreeAnalysis::check(Instruction* Inst) {
   /**
    * Inst can cause a double-free if:
    *   Inst call instruction with name `free`,
@@ -59,7 +59,7 @@ bool DivZeroAnalysis::check(Instruction* Inst) {
 const auto PASS_NAME = "DoubleFree";
 const auto PASS_DESC = "Double-free Analysis";
 
-PreservedAnalyses DivZeroAnalysis::run(Module& M, ModuleAnalysisManager& AM) {
+PreservedAnalyses DoubleFreeAnalysis::run(Module& M, ModuleAnalysisManager& AM) {
   outs() << "Running " << PASS_DESC << " on module " << M.getName() << "\n";
 
   auto& Context = M.getContext();
@@ -112,7 +112,7 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
                     ModulePassManager& MPM,
                     ArrayRef<PassBuilder::PipelineElement>) {
                   if (Name == PASS_NAME) {
-                    MPM.addPass(DivZeroAnalysis());
+                    MPM.addPass(DoubleFreeAnalysis());
                     return true;
                   }
                   return false;

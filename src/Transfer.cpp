@@ -1,4 +1,4 @@
-#include "DivZeroAnalysis.h"
+#include "DoubleFreeAnalysis.h"
 #include "Utils.h"
 
 namespace dataflow {
@@ -122,7 +122,7 @@ Domain* eval(CmpInst* Cmp, const Memory* InMem) {
   }
 }
 
-void DivZeroAnalysis::transfer(Instruction* Inst,
+void DoubleFreeAnalysis::transfer(Instruction* Inst,
     const Memory* In,
     Memory& NOut,
     PointerAnalysis* PA,

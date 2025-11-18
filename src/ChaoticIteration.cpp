@@ -1,4 +1,4 @@
-#include "DivZeroAnalysis.h"
+#include "DoubleFreeAnalysis.h"
 #include "Utils.h"
 
 namespace dataflow {
@@ -94,7 +94,7 @@ Memory* join(Memory* Mem1, Memory* Mem2) {
   return Result;
 }
 
-void DivZeroAnalysis::flowIn(Instruction* Inst, Memory* InMem) {
+void DoubleFreeAnalysis::flowIn(Instruction* Inst, Memory* InMem) {
   /**
    * For each predecessor Pred of instruction Inst, do the following:
    *   + Get the Out Memory of Pred using OutMap.
@@ -167,7 +167,7 @@ bool equal(Memory* Mem1, Memory* Mem2) {
   return true;
 }
 
-void DivZeroAnalysis::flowOut(
+void DoubleFreeAnalysis::flowOut(
     Instruction* Inst, Memory* Pre, Memory* Post, SetVector<Instruction*>& WorkSet) {
   /**
    * For each given instruction, merge abstract domain from pre-transfer memory
@@ -198,7 +198,7 @@ void DivZeroAnalysis::flowOut(
   }
 }
 
-void DivZeroAnalysis::doAnalysis(Function& F, PointerAnalysis* PA) {
+void DoubleFreeAnalysis::doAnalysis(Function& F, PointerAnalysis* PA) {
   SetVector<Instruction*> WorkSet;
   SetVector<Value*> PointerSet;
   /**

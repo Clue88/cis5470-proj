@@ -16,9 +16,9 @@ include_directories(${LLVM_INCLUDE_DIRS} include)
 link_directories(${LLVM_LIBRARY_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
 
-add_llvm_library(DivZeroPass MODULE
+add_llvm_library(DoubleFreePass MODULE
   src/PointerAnalysis.cpp
-  src/DivZeroAnalysis.cpp
+  src/DoubleFreeAnalysis.cpp
   src/Transfer.cpp
   src/ChaoticIteration.cpp
   src/Domain.cpp

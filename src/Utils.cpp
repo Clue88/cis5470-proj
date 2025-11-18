@@ -1,7 +1,7 @@
 #include "Utils.h"
 
-#include "DivZeroAnalysis.h"
 #include "Domain.h"
+#include "DoubleFreeAnalysis.h"
 
 const char* WHITESPACES = " \t\n\r";
 const size_t VARIABLE_PADDED_LEN = 8;
