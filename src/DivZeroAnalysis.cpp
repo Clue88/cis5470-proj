@@ -6,7 +6,7 @@
 namespace dataflow {
 
 //===----------------------------------------------------------------------===//
-// DivZero Analysis Implementation
+// DoubleFree Analysis Implementation
 //===----------------------------------------------------------------------===//
 
 /**
@@ -25,31 +25,39 @@ namespace dataflow {
 
 bool DivZeroAnalysis::check(Instruction* Inst) {
   /**
-   * Inst can cause a division by zero if:
-   *   Inst is a signed or unsigned division instruction and,
-   *   The divisor is either Zero or MaybeZero.
-   *
-   * Hint: getOrExtract function may be useful to simplify your code.
+   * Inst can cause a double-free if:
+   *   Inst call instruction with name `free`,
+   *   The operand is either Freed or MaybeFreed.
    */
-  auto* BinOp = dyn_cast<BinaryOperator>(Inst);
-  if (!BinOp) {
+  auto* Call = dyn_cast<CallInst>(Inst);
+  if (!Call) {
     return false;
   }
 
-  const unsigned Op = BinOp->getOpcode();
-  if (Op != Instruction::SDiv && Op != Instruction::UDiv) {
+  Function* Callee = Call->getCalledFunction();
+  if (!Callee) {
+    return fale;
+  }
+
+  if (!Callee->getName().equals("free")) {
     return false;
   }
 
-  Value* Divisor = BinOp->getOperand(1);
+  if (Call->arg_size() < 1) {
+    return false;  // shouldn't be possible, since free takes 1 arg
+  }
+
+  Value* Ptr = Call->getArgOperand(0);
   Memory* In = InMap[Inst];
-  Domain* D = getOrExtract(In, Divisor);
 
-  return (D->Value == Domain::Zero || D->Value == Domain::MaybeZero);
+  // Track the freed-ness of the pointer value
+  Domain* D = getOrExtract(In, Ptr);
+
+  return (D->Value == Domain::Freed || D->Value == Domain::MaybeFreed);
 }
 
-const auto PASS_NAME = "DivZero";
-const auto PASS_DESC = "Divide-by-zero Analysis";
+const auto PASS_NAME = "DoubleFree";
+const auto PASS_DESC = "Double-free Analysis";
 
 PreservedAnalyses DivZeroAnalysis::run(Module& M, ModuleAnalysisManager& AM) {
   outs() << "Running " << PASS_DESC << " on module " << M.getName() << "\n";

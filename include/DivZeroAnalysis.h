@@ -18,31 +18,31 @@
 
 namespace dataflow {
 
-using Memory = std::map<std::string, Domain *>;
+using Memory = std::map<std::string, Domain*>;
 
 struct DivZeroAnalysis : public PassInfoMixin<DivZeroAnalysis> {
   static char ID;
-  std::map<Instruction *, Memory *> InMap;
-  std::map<Instruction *, Memory *> OutMap;
-  SetVector<Instruction *> ErrorInsts;
+  std::map<Instruction*, Memory*> InMap;
+  std::map<Instruction*, Memory*> OutMap;
+  SetVector<Instruction*> ErrorInsts;
 
   /**
    * This function is called for each module M in the input C program
    * that the compiler encounters during a pass.
    * You do not need to modify this function.
    */
-  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+  PreservedAnalyses run(Module& M, ModuleAnalysisManager& AM);
 
  protected:
   /**
    * This function creates a transfer function that updates the Out Memory based
    * on In Memory and the instruction type/parameters.
    */
-  void transfer(Instruction *I,
-      const Memory *In,
-      Memory &NOut,
-      PointerAnalysis *PA,
-      SetVector<Value *> PointerSet);
+  void transfer(Instruction* I,
+      const Memory* In,
+      Memory& NOut,
+      PointerAnalysis* PA,
+      SetVector<Value*> PointerSet);
 
   /**
    * @brief This function implements the chaotic iteration algorithm using
@@ -50,7 +50,7 @@ struct DivZeroAnalysis : public PassInfoMixin<DivZeroAnalysis> {
    *
    * @param F The function to be analyzed.
    */
-  void doAnalysis(Function &F, PointerAnalysis *PA);
+  void doAnalysis(Function& F, PointerAnalysis* PA);
 
   /**
    * @brief Flow the abstract domains from all predecessors of Inst into the In
@@ -59,7 +59,7 @@ struct DivZeroAnalysis : public PassInfoMixin<DivZeroAnalysis> {
    * @param Inst Instruction to flow In Memory for.
    * @param InMem InMemory object of Inst to populate.
    */
-  void flowIn(Instruction *Inst, Memory *InMem);
+  void flowIn(Instruction* Inst, Memory* InMem);
 
   /**
    * @brief Merge the previous Out Memory of Inst with the current Out Memory
@@ -71,15 +71,15 @@ struct DivZeroAnalysis : public PassInfoMixin<DivZeroAnalysis> {
    * @param WorkSet WorkSet
    */
   void flowOut(
-      Instruction *Inst, Memory *Pre, Memory *Post, SetVector<Instruction *> &WorkSet);
+      Instruction* Inst, Memory* Pre, Memory* Post, SetVector<Instruction*>& WorkSet);
 
   /**
-   * Can the Instruction Inst incurr a divide by zero error?
+   * Can the Instruction Inst incurr a double-free error?
    *
    * @param Inst Instruction to check.
-   * @return true if the instruction can incur a divide by zero error.
+   * @return true if the instruction can incur a double-free error.
    */
-  bool check(Instruction *Inst);
+  bool check(Instruction* Inst);
 
   std::string getAnalysisName() {
     return "DivZero";
