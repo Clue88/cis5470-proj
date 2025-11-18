@@ -1,5 +1,5 @@
-#ifndef DIV_ZERO_ANALYSIS_H
-#define DIV_ZERO_ANALYSIS_H
+#ifndef DOUBLE_FREE_ANALYSIS_H
+#define DOUBLE_FREE_ANALYSIS_H
 
 #include "Domain.h"
 #include "PointerAnalysis.h"
@@ -87,4 +87,4 @@ struct DoubleFreeAnalysis : public PassInfoMixin<DoubleFreeAnalysis> {
 };
 }  // namespace dataflow
 
-#endif  // DIV_ZERO_ANALYSIS_H
+#endif  // DOUBLE_FREE_ANALYSIS_H
