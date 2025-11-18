@@ -1,8 +1,15 @@
+#include <stdlib.h>
+
 int main() {
-  int a = 0;
-  int b = 0;
-  int c = a == b;
-  int d = b / c;
-  int e = d / d;  // divide by zero
+  int* p = (int*)malloc(sizeof(int));
+  if (!p) {
+    return 0;
+  }
+
+  if (p) {
+    free(p);
+    free(p);  // double-free
+  }
+
   return 0;
 }

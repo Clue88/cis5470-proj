@@ -1,10 +1,13 @@
+#include <stdlib.h>
+
 int main() {
-  int a = 0;
-  int b = 1;
-  int c = a + 1;
-  int d = b / a;  // Divide by zero
-  if (c) {
-    int a = 1;
+  int* p = (int*)malloc(sizeof(int));
+  if (!p) {
+    return 0;
   }
+
+  free(p);
+  free(p);  // double free
+
   return 0;
 }

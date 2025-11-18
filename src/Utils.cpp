@@ -44,18 +44,12 @@ std::string address(const Value* Val) {
   return Code;
 }
 
-Domain::Element extractFromValue(const Value* Val) {
-  if (dyn_cast<UndefValue>(Val)) {
-    return Domain::MaybeZero;
-  } else if (auto ConstVal = dyn_cast<ConstantData>(Val)) {
-    return (ConstVal->isZeroValue() ? Domain::Zero : Domain::NonZero);
-  }
-  return Domain::Uninit;
-}
-
 Domain* getOrExtract(const Memory* Mem, const Value* Val) {
-  return getOrDefault<Domain*>(
-      Mem, variable(Val), [&V = Val] { return new Domain(extractFromValue(V)); });
+  auto it = Mem->find(variable(Val));
+  if (it != Mem->end()) {
+    return it->second;
+  }
+  return new Domain(Domain::Uninit);
 }
 
 void printMemory(const Memory* Mem) {

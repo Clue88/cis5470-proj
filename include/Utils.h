@@ -26,17 +26,6 @@ std::string variable(const Value* Val);
 std::string address(const Value* Val);
 
 /**
- * @brief Try to extract the Domain of a value.
- *
- * When Val is a ConstantInt, we can extract its Domain.
- *
- * @param Val Value to extract the Domain for.
- * @return Domain::Element Domain of Val, or Domain::Uninit if
- *  Val is not a ConstantInt.
- */
-Domain::Element extractFromValue(const Value* Val);
-
-/**
  * @brief Get the Domain of Val from Memory Or try Extracting it.
  *
  * @param Mem Memory containing the domain of Val.

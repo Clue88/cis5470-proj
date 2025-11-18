@@ -1,17 +1,15 @@
-#include <stdio.h>
+#include <stdlib.h>
 
-void f() {
-  int in = getchar();
-  unsigned int a = 10;
-  unsigned int b = 2;
-
-  if (in > 0) {
-    b = 0;
-  } else if (in == 0) {
-    b = 2 - b;
-  } else {
-    b = -2 + b;
+int main() {
+  int* p = (int*)malloc(sizeof(int));
+  if (!p) {
+    return 0;
   }
 
-  int out = a / b;
+  int* q = p;
+
+  free(p);
+  q = NULL;
+
+  return 0;  // no warning
 }

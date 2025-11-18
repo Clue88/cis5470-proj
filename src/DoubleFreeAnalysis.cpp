@@ -36,7 +36,7 @@ bool DoubleFreeAnalysis::check(Instruction* Inst) {
 
   Function* Callee = Call->getCalledFunction();
   if (!Callee) {
-    return fale;
+    return false;
   }
 
   if (!Callee->getName().equals("free")) {
@@ -61,8 +61,6 @@ const auto PASS_DESC = "Double-free Analysis";
 
 PreservedAnalyses DoubleFreeAnalysis::run(Module& M, ModuleAnalysisManager& AM) {
   outs() << "Running " << PASS_DESC << " on module " << M.getName() << "\n";
-
-  auto& Context = M.getContext();
 
   for (auto& F : M) {
     if (F.isDeclaration()) {

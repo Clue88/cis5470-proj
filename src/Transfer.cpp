@@ -19,107 +19,58 @@ bool isInput(Instruction* Inst) {
 }
 
 /**
- * Evaluate a PHINode to get its Domain.
- *
- * @param Phi PHINode to evaluate
- * @param InMem InMemory of Phi
- * @return Domain of Phi
+ * @brief Is the given call instruction alloc-like?
+ * 
+ * @param Call The call instruction to check.
+ * @return true if it is alloc-like, i.e., `malloc`, `calloc`, etc., false otherwise.
  */
-Domain* eval(PHINode* Phi, const Memory* InMem) {
-  if (auto ConstantVal = Phi->hasConstantValue()) {
-    return new Domain(extractFromValue(ConstantVal));
+static bool isAllocLike(CallInst* Call) {
+  if (auto* Fun = Call->getCalledFunction()) {
+    auto Name = Fun->getName();
+    return Name.equals("malloc") || Name.equals("calloc") || Name.equals("realloc");
   }
-
-  Domain* Joined = new Domain(Domain::Uninit);
-
-  for (unsigned int i = 0; i < Phi->getNumIncomingValues(); i++) {
-    auto Dom = getOrExtract(InMem, Phi->getIncomingValue(i));
-    Joined = Domain::join(Joined, Dom);
-  }
-  return Joined;
+  return false;
 }
 
 /**
- * @brief Evaluate the +, -, * and / BinaryOperator instructions
- * using the Domain of its operands and return the Domain of the result.
- *
- * @param BinOp BinaryOperator to evaluate
- * @param InMem InMemory of BinOp
- * @return Domain of BinOp
+ * @brief Is the given call instruction free-like?
+ * 
+ * @param Call The call instruction to check.
+ * @return true if it is free-like, i.e., `free` or some other variant, false otherwise.
  */
-Domain* eval(BinaryOperator* BinOp, const Memory* InMem) {
-  auto* L = getOrExtract(InMem, BinOp->getOperand(0));
-  auto* R = getOrExtract(InMem, BinOp->getOperand(1));
-
-  switch (BinOp->getOpcode()) {
-    case Instruction::Add:
-      return Domain::add(L, R);
-    case Instruction::Sub:
-      return Domain::sub(L, R);
-    case Instruction::Mul:
-      return Domain::mul(L, R);
-    case Instruction::SDiv:
-    case Instruction::UDiv:
-      return Domain::div(L, R);
-    default:
-      return new Domain(Domain::MaybeZero);
+static bool isFreeLike(CallInst* Call) {
+  if (auto* Fun = Call->getCalledFunction()) {
+    auto Name = Fun->getName();
+    return Name.equals("free");
   }
+  return false;
 }
 
 /**
- * @brief Evaluate Cast instructions.
- *
- * @param Cast Cast instruction to evaluate
- * @param InMem InMemory of Instruction
- * @return Domain of Cast
+ * @brief Evaluate a Value to get its Domain.
  */
-Domain* eval(CastInst* Cast, const Memory* InMem) {
-  return getOrExtract(InMem, Cast->getOperand(0));
-}
-
-/**
- * @brief Evaluate the ==, !=, <, <=, >=, and > Comparision operators using
- * the Domain of its operands to compute the Domain of the result.
- *
- * @param Cmp Comparision instruction to evaluate
- * @param InMem InMemory of Cmp
- * @return Domain of Cmp
- */
-Domain* eval(CmpInst* Cmp, const Memory* InMem) {
-  auto* L = getOrExtract(InMem, Cmp->getOperand(0));
-  auto* R = getOrExtract(InMem, Cmp->getOperand(1));
-  auto pred = Cmp->getPredicate();
-
-  const auto LV = L->Value;
-  const auto RV = R->Value;
-
-  switch (pred) {
-    case CmpInst::ICMP_EQ:
-      // 0 == 0 -> true
-      if (LV == Domain::Zero && RV == Domain::Zero) {
-        return new Domain(Domain::NonZero);
-      }
-      // 0 == NZ -> false and vice versa
-      if ((LV == Domain::Zero && RV == Domain::NonZero) ||
-          (LV == Domain::NonZero && RV == Domain::Zero)) {
-        return new Domain(Domain::Zero);
-      }
-      // anything else is unknown
-      return new Domain(Domain::MaybeZero);
-
-    case CmpInst::ICMP_NE:
-      if (LV == Domain::Zero && RV == Domain::Zero) {
-        return new Domain(Domain::Zero);
-      }
-      if ((LV == Domain::Zero && RV == Domain::NonZero) ||
-          (LV == Domain::NonZero && RV == Domain::Zero)) {
-        return new Domain(Domain::NonZero);
-      }
-      return new Domain(Domain::MaybeZero);
-
-    default:
-      return new Domain(Domain::MaybeZero);
+Domain* evalCopyLike(Value* V, const Memory* InMem) {
+  // If V is a Phi, propagate from incoming values, joining
+  if (auto* Phi = dyn_cast<PHINode>(V)) {
+    Domain* Joined = new Domain(Domain::Uninit);
+    for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
+      Domain* Dom = getOrExtract(InMem, Phi->getIncomingValue(i));
+      Joined = Domain::join(Joined, Dom);
+    }
+    return Joined;
   }
+
+  // If V is a cast or GEP, just propagate from the operand
+  if (auto* Cast = dyn_cast<CastInst>(V)) {
+    return getOrExtract(InMem, Cast->getOperand(0));
+  }
+
+  if (auto* GEP = dyn_cast<GetElementPtrInst>(V)) {
+    return getOrExtract(InMem, GEP->getPointerOperand());
+  }
+
+  // Fallback: look up the value itself
+  return getOrExtract(InMem, V);
 }
 
 void DoubleFreeAnalysis::transfer(Instruction* Inst,
@@ -127,113 +78,95 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
     Memory& NOut,
     PointerAnalysis* PA,
     SetVector<Value*> PointerSet) {
-  if (isInput(Inst)) {
-    // The instruction is a user controlled input, it can have any value.
-    NOut[variable(Inst)] = new Domain(Domain::MaybeZero);
-  } else if (auto Phi = dyn_cast<PHINode>(Inst)) {
-    // Evaluate PHI node
-    NOut[variable(Phi)] = eval(Phi, In);
-  } else if (auto BinOp = dyn_cast<BinaryOperator>(Inst)) {
-    // Evaluate BinaryOperator
-    NOut[variable(BinOp)] = eval(BinOp, In);
-  } else if (auto Cast = dyn_cast<CastInst>(Inst)) {
-    // Evaluate Cast instruction
-    NOut[variable(Cast)] = eval(Cast, In);
-  } else if (auto Cmp = dyn_cast<CmpInst>(Inst)) {
-    // Evaluate Comparision instruction
-    NOut[variable(Cmp)] = eval(Cmp, In);
-  } else if (auto Alloca = dyn_cast<AllocaInst>(Inst)) {
-    // Do nothing here.
-  } else if (auto Store = dyn_cast<StoreInst>(Inst)) {
-    /**
-     * Store instruction can either add new variables or overwrite existing variables into memory maps.
-     * To update the memory map, we rely on the points-to graph constructed in PointerAnalysis.
-     *
-     * To build the abstract memory map, you need to ensure all pointer references are in-sync, and
-     * will converge upon a precise abstract value. To achieve this, implement the following workflow:
-     *
-     * Iterate through the provided PointerSet:
-     *   - If there is a may-alias (i.e., `alias()` returns true) between two variables:
-     *     + Get the abstract values of each variable.
-     *     + Join the abstract values using Domain::join().
-     *     + Update the memory map for the current assignment with the joined abstract value.
-     *     + Update the memory map for all may-alias assignments with the joined abstract value.
-     *
-     * Hint: You may find getOperand(), getValueOperand(), and getPointerOperand() useful.
-     */
-    Value* Val = Store->getValueOperand();
-    Value* Ptr = Store->getPointerOperand();
+  // Copy In into NOut as a default
+  for (const auto& kv : *In) {
+    NOut[kv.first] = new Domain(kv.second->Value);
+  }
 
-    if (!Val->getType()->isIntegerTy()) {
-    } else {
-      Domain* stored = getOrExtract(In, Val);
-      Domain* joined = new Domain(stored->Value);
+  // We only care about pointer-typed values
+  auto updatePtr = [&](Value* V, Domain::Element E) {
+    if (!V->getType()->isPointerTy()) {
+      return;
+    }
+    NOut[variable(V)] = new Domain(E);
+  };
 
-      std::string ptrName = variable(Ptr);
+  if (auto* Call = dyn_cast<CallInst>(Inst)) {
+    // --- Allocation ---
+    if (isAllocLike(Call)) {
+      if (Call->getType()->isPointerTy()) {
+        updatePtr(Call, Domain::Live);
+      }
+      return;
+    }
 
-      {
-        Domain* cur = getOrExtract(In, Ptr);
-        joined = Domain::join(joined, cur);
+    // --- Free ---
+    if (isFreeLike(Call)) {
+      if (Call->arg_size() < 1) {
+        return;
+      }
+      Value* Ptr = Call->getArgOperand(0);
+      Domain* Before = getOrExtract(In, Ptr);
+
+      // If domain is Uninit, treat as Freed.
+      Domain::Element NewState;
+      switch (Before->Value) {
+        case Domain::Uninit:
+          NewState = Domain::Freed;
+          break;
+        case Domain::Live:
+          NewState = Domain::Freed;
+          break;
+        case Domain::Freed:
+          NewState = Domain::Freed;
+          break;
+        case Domain::MaybeFreed:
+          NewState = Domain::MaybeFreed;
+          break;
       }
 
-      for (Value* V : PointerSet) {
-        if (!V->getType()->isPointerTy()) {
-          continue;
-        }
-        std::string vName = variable(V);
-        if (PA->alias(ptrName, vName)) {
-          Domain* cur = getOrExtract(In, V);
-          joined = Domain::join(joined, cur);
-        }
-      }
+      updatePtr(Ptr, NewState);
+      return;
+    }
 
-      NOut[ptrName] = new Domain(joined->Value);
-      for (Value* V : PointerSet) {
-        if (!V->getType()->isPointerTy()) {
-          continue;
-        }
-        std::string vName = variable(V);
-        if (PA->alias(ptrName, vName)) {
-          NOut[vName] = new Domain(joined->Value);
-        }
-      }
+    // Other calls that return pointers update to MaybeFreed
+    if (Call->getType()->isPointerTy()) {
+      updatePtr(Call, Domain::MaybeFreed);
     }
-  } else if (auto Load = dyn_cast<LoadInst>(Inst)) {
-    /**
-     * Rely on the existing variables defined within the `In` memory to
-     * know what abstract domain should be for the new variable
-     * introduced by a load instruction.
-     *
-     * If the memory map already contains the variable, propagate the existing
-     * abstract value to NOut.
-     * Otherwise, initialize the memory map for it.
-     *
-     * Hint: You may use getPointerOperand().
-     */
-    Value* Ptr = Load->getPointerOperand();
+    return;
+  }
 
-    std::string lhs = variable(Load);
-    auto it = In->find(lhs);
-    if (it != In->end()) {
-      NOut[lhs] = new Domain(it->second->Value);
-    } else {
-      NOut[lhs] = getOrExtract(In, Ptr);
+  // --- Phi nodes ---
+  if (auto* Phi = dyn_cast<PHINode>(Inst)) {
+    if (Phi->getType()->isPointerTy()) {
+      NOut[variable(Phi)] = evalCopyLike(Phi, In);
     }
-  } else if (auto Branch = dyn_cast<BranchInst>(Inst)) {
-    // Analysis is flow-insensitive, so do nothing here.
-  } else if (auto Call = dyn_cast<CallInst>(Inst)) {
-    /**
-     * Populate the NOut with an appropriate abstract domain.
-     *
-     * You only need to consider calls with int return type.
-     */
-    if (Call->getType()->isIntegerTy()) {
-      NOut[variable(Call)] = new Domain(Domain::MaybeZero);
+    return;
+  }
+
+  // --- Pointer-copying instructions ---
+  if (auto* Cast = dyn_cast<CastInst>(Inst)) {
+    if (Cast->getType()->isPointerTy() || Cast->getOperand(0)->getType()->isPointerTy()) {
+      NOut[variable(Cast)] = evalCopyLike(Cast, In);
     }
-  } else if (auto Return = dyn_cast<ReturnInst>(Inst)) {
-    // Analysis is intra-procedural, so do nothing here.
-  } else {
-    errs() << "Unhandled instruction: " << *Inst << "\n";
+    return;
+  }
+
+  if (auto* GEP = dyn_cast<GetElementPtrInst>(Inst)) {
+    NOut[variable(GEP)] = evalCopyLike(GEP, In);
+    return;
+  }
+
+  if (auto* Load = dyn_cast<LoadInst>(Inst)) {
+    if (Load->getType()->isPointerTy()) {
+      // Take freedness of the memory we load from
+      NOut[variable(Load)] = evalCopyLike(Load->getPointerOperand(), In);
+    }
+  }
+
+  if (auto* Store = dyn_cast<StoreInst>(Inst)) {
+    // Ignore stores for now
+    return;
   }
 }
 

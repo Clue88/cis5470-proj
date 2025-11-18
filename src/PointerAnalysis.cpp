@@ -30,7 +30,6 @@ void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
       return;
     std::string Variable = variable(Load->getPointerOperand());
     PointsToSet& R = PointsTo[Variable];
-    PointsToSet& L = PointsTo[variable(Load)];
     PointsToSet Result;
     for (auto& I : R) {
       PointsToSet& S = PointsTo[I];

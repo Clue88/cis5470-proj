@@ -1,7 +1,13 @@
-#include <stdio.h>
+#include <stdlib.h>
 
 int main() {
-  int x = getchar();
-  int y = 5 / x;
+  int* p = (int*)malloc(sizeof(int));
+  if (!p) {
+    return 0;
+  }
+
+  *p = 42;
+  free(p);  // no warning
+
   return 0;
 }

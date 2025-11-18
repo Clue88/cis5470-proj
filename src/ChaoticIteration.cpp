@@ -233,7 +233,7 @@ void DoubleFreeAnalysis::doAnalysis(Function& F, PointerAnalysis* PA) {
 
     if (isEntryInst(Inst)) {
       for (auto& Arg : F.args()) {
-        (*In)[variable(&Arg)] = new Domain(Domain::MaybeZero);
+        (*In)[variable(&Arg)] = new Domain(Domain::Live);
       }
     }
 

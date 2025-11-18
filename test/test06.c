@@ -1,10 +1,15 @@
-#include <stdio.h>
+#include <stdlib.h>
 
-void f() {
-  int x = getchar();
-  int y = 2;
-  if (x > 10) {
-    y = 0;
+int main() {
+  int* p = (int*)malloc(sizeof(int));
+  if (!p) {
+    return 0;
   }
-  int z = x / y;  // divide-by-zero after branch
+
+  int* q = p;
+
+  free(p);
+  free(q);  // double-free
+
+  return 0;
 }
