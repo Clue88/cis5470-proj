@@ -26,9 +26,18 @@ class Domain {
     Freed,
     MaybeFreed
   };
+  enum NullState {
+    Unknown,
+    Null,
+    NotNull,
+    MaybeNull
+  };
   Domain();
   Domain(Element V);
+  Domain(Element V, NullState N);
+  Domain(const Domain &Other);
   Element Value;
+  NullState Nstate;
 
   static Domain* join(Domain* E1, Domain* E2);
   static bool equal(Domain E1, Domain E2);

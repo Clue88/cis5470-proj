@@ -9,7 +9,7 @@ namespace dataflow {
 static void updateDomain(Memory& NOut, const std::string& Name, Domain* NewDom) {
   auto It = NOut.find(Name);
   if (It == NOut.end()) {
-    NOut[Name] = new Domain(NewDom->Value);
+    NOut[Name] = new Domain(*NewDom);
   } else {
     Domain* Joined = Domain::join(It->second, NewDom);
     It->second = Joined;
@@ -50,7 +50,7 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
     SetVector<Value*> PointerSet) {
   // Copy In into NOut as a default
   for (const auto& kv : *In) {
-    NOut[kv.first] = new Domain(kv.second->Value);
+    NOut[kv.first] = new Domain(*kv.second);
   }
 
   if (auto* Call = dyn_cast<CallInst>(Inst)) {
@@ -60,7 +60,8 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
       // malloc-like: mark result Live
       if (Name.equals("malloc") || Name.equals("calloc") || Name.equals("realloc")) {
         if (Call->getType()->isPointerTy()) {
-          NOut[variable(Call)] = new Domain(Domain::Live);
+          // malloc returns a live pointer; treat as NotNull by default
+          NOut[variable(Call)] = new Domain(Domain::Live, Domain::NotNull);
         }
         return;
       }
@@ -70,8 +71,9 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
         if (Call->arg_size() >= 1) {
           Value* Arg = Call->getArgOperand(0);
           std::string argName = variable(Arg);
-
-          NOut[variable(Arg)] = new Domain(Domain::Freed);
+          // Preserve existing nullness when marking Freed
+          Domain* Prev = getOrExtract(In, Arg);
+          NOut[variable(Arg)] = new Domain(Domain::Freed, Prev->Nstate);
 
           for (Value* V : PointerSet) {
             if (!V->getType()->isPointerTy()) {
@@ -84,7 +86,8 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
             }
 
             if (PA->alias(argName, vName)) {
-              NOut[vName] = new Domain(Domain::Freed);
+              Domain* PrevV = getOrExtract(In, V);
+              NOut[vName] = new Domain(Domain::Freed, PrevV->Nstate);
             }
           }
         }
@@ -94,7 +97,7 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
 
     // Set domain for other calls to Uninit
     if (Call->getType()->isPointerTy()) {
-      NOut[variable(Call)] = new Domain(Domain::Uninit);
+      NOut[variable(Call)] = new Domain(Domain::Uninit, Domain::Unknown);
     }
     return;
   }
@@ -133,6 +136,7 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
     }
 
     Domain* D = getOrExtract(In, Ptr);
+    // If we are loading from a definitely-null pointer, set loaded value to Null
     updateDomain(NOut, variable(Load), D);
     return;
   }
@@ -144,8 +148,13 @@ void DoubleFreeAnalysis::transfer(Instruction* Inst,
     if (!Val->getType()->isPointerTy()) {
       return;
     }
-
-    Domain* DVal = getOrExtract(In, Val);
+    Domain* DVal;
+    if (isa<ConstantPointerNull>(Val)) {
+      // Explicit NULL constant
+      DVal = new Domain(Domain::Uninit, Domain::Null);
+    } else {
+      DVal = getOrExtract(In, Val);
+    }
     updateDomain(NOut, variable(Ptr), DVal);
     return;
   }

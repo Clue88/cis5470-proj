@@ -39,6 +39,11 @@ bool DoubleFreeAnalysis::check(Instruction* Inst) {
   // Track the freed-ness of the pointer value
   Domain* D = getOrExtract(In, Ptr);
 
+  // If the pointer is definitely NULL, free(NULL) is a no-op -> not an error
+  if (D->Nstate == Domain::Null) {
+    return false;
+  }
+
   return (D->Value == Domain::Freed || D->Value == Domain::MaybeFreed);
 }
 

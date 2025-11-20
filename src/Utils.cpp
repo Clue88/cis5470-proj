@@ -49,7 +49,7 @@ Domain* getOrExtract(const Memory* Mem, const Value* Val) {
   if (it != Mem->end()) {
     return it->second;
   }
-  return new Domain(Domain::Uninit);
+  return new Domain(Domain::Uninit, Domain::Unknown);
 }
 
 void printMemory(const Memory* Mem) {

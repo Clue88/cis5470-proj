@@ -3,6 +3,7 @@
 #include "Utils.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Constants.h"
 
 namespace dataflow {
 
@@ -12,19 +13,32 @@ void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
     S.insert(address(Alloca));
 
   } else if (StoreInst* Store = dyn_cast<StoreInst>(Inst)) {
-    if (!Store->getValueOperand()->getType()->isPointerTy())
-      return;
-
     Value* Pointer = Store->getPointerOperand();
     Value* Value = Store->getValueOperand();
 
+    // Check for stores through a pointer that might be NULL
+    PointsToSet& PtrSet = PointsTo[variable(Pointer)];
+    if (PtrSet.find(std::string("NULL")) != PtrSet.end()) {
+      errs() << "Possible null dereference (store) at: " << *Store << "\n";
+    }
+
+    // If the RHS is not a pointer, nothing to update
+    if (!Value->getType()->isPointerTy())
+      return;
+
+    // RHS could be an explicit null constant
+    PointsToSet R;
+    if (isa<ConstantPointerNull>(Value)) {
+      R.insert(std::string("NULL"));
+    } else {
+      R = PointsTo[variable(Value)];
+    }
+
     PointsToSet& L = PointsTo[variable(Pointer)];
-    PointsToSet& R = PointsTo[variable(Value)];
     for (auto& I : L) {
       PointsToSet& S = PointsTo[I];
       PointsToSet Result;
-      std::set_union(
-          S.begin(), S.end(), R.begin(), R.end(), std::inserter(Result, Result.begin()));
+      std::set_union(S.begin(), S.end(), R.begin(), R.end(), std::inserter(Result, Result.begin()));
       PointsTo[I] = Result;
     }
 
@@ -32,17 +46,19 @@ void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
     if (!Load->getType()->isPointerTy()) {
       return;
     }
+    // Check whether we are dereferencing a pointer that might be NULL
+    Value* Ptr = Load->getPointerOperand();
+    PointsToSet& PSet = PointsTo[variable(Ptr)];
+    if (PSet.find(std::string("NULL")) != PSet.end()) {
+      errs() << "Possible null dereference (load) at: " << *Load << "\n";
+    }
 
     std::string VariableName = variable(Load->getPointerOperand());
     PointsToSet& R = PointsTo[VariableName];
     PointsToSet Result;
     for (auto& I : R) {
       PointsToSet& S = PointsTo[I];
-      std::set_union(S.begin(),
-          S.end(),
-          Result.begin(),
-          Result.end(),
-          std::inserter(Result, Result.begin()));
+      std::set_union(S.begin(), S.end(), Result.begin(), Result.end(), std::inserter(Result, Result.begin()));
     }
     PointsTo[variable(Load)] = Result;
 
