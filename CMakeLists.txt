@@ -24,3 +24,9 @@ add_llvm_library(DoubleFreePass MODULE
   src/Domain.cpp
   src/Utils.cpp
 )
+
+add_llvm_library(PointerAnalysis MODULE
+  src/PointerAnalysis.cpp
+  src/Domain.cpp
+  src/Utils.cpp
+)
