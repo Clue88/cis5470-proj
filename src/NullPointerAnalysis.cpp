@@ -1,6 +1,5 @@
-#include "PointerAnalysis.h"
-
 #include "Domain.h"
+#include "PointerAnalysis.h"
 #include "Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstIterator.h"
@@ -319,10 +318,11 @@ bool PointerAnalysis::alias(std::string& Ptr1, std::string& Ptr2) const {
 // Pass registration for standalone PointerAnalysis
 //===----------------------------------------------------------------------===//
 
-const auto PASS_NAME = "PointerAnalysis";
+const auto PASS_NAME = "NullPointerAnalysis";
 const auto PASS_DESC = "Null pointer dereference: Constraint-Based Analysis";
 
-struct PointerAnalysisPass : public llvm::PassInfoMixin<PointerAnalysisPass> {
+struct NullPointerAnalysisPass
+    : public llvm::PassInfoMixin<NullPointerAnalysisPass> {
     llvm::PreservedAnalyses run(llvm::Module& M,
                                 llvm::ModuleAnalysisManager& AM) {
         llvm::outs() << "Running " << PASS_DESC << " on module " << M.getName()
@@ -348,7 +348,7 @@ llvmGetPassPluginInfo() {
                     [](llvm::StringRef Name, llvm::ModulePassManager& MPM,
                        llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
                         if (Name == PASS_NAME) {
-                            MPM.addPass(PointerAnalysisPass());
+                            MPM.addPass(NullPointerAnalysisPass());
                             return true;
                         }
                         return false;

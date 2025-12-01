@@ -30,3 +30,10 @@ add_llvm_library(PointerAnalysis MODULE
   src/Domain.cpp
   src/Utils.cpp
 )
+
+add_llvm_library(NullPointerAnalysis MODULE
+  src/NullPointerAnalysis.cpp
+  src/NullPointerAnalysisPass.cpp
+  src/Domain.cpp
+  src/Utils.cpp
+)
