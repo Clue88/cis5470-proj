@@ -49,3 +49,51 @@ The current results are as follows (n = 1266, with 496 bad programs and 770 good
 | **Precision** | **1.000** |
 | **Recall** | **0.254** |
 | **F-Score** | **0.405** |
+
+## Use-After-Free (CWE-416) Analysis
+Use-after-free detection was done using dataflow and pointer analysis, similar to double free
+analysis.
+
+### Handwritten Tests
+Simple handwritten tests are located in the `/test` directory.
+
+* `test01.c` - Basic UAF from a load instruction (should warn)
+* `test02.c` - Basic UAF from a store instruction (should warn)
+* `test03.c` - UAF with aliasing (should warn)
+* `test04.c` - UAF inside a call with freed pointer as an argument (should warn)
+* `test05.c` - Free null pointer and no dereference, no UAF (should NOT warn)
+* `test06.c` - Possible UAF via branch condition (should warn)
+
+The tests can be run using `make`:
+```bash
+$ cd test
+$ make all
+```
+
+The results are stored in `.out` files in the test directory.
+
+### Juliet Testbench
+The Juliet Test Suite is a large collection of synthetic C/C++ programs created by NIST to evaluate
+static and dynamic analysis tools. Each file contains one or more functions labeled as good (safe)
+or bad (contains a known vulnerability), allowing tools to be tested for true positives, false
+positives, and false negatives.
+
+For CWE-415, there are 1266 test cases, which can be run using `make` and evaluated using a Python
+script:
+```bash
+$ cd juliet/CWE415_Double_Free
+$ make all
+$ python3 eval.py
+```
+
+The current results are as follows (n = 1266, with 496 bad programs and 770 good programs):
+
+| Metric | Value |
+| ------ | ----- |
+| True Positives (bad programs, rejected) | 126 |
+| False Negatives (bad programs, accepted) | 370 |
+| False Positives (good programs, rejected) | 0 |
+| True Negatives (good programs, accepted) | 770 |
+| **Precision** | **1.000** |
+| **Recall** | **0.254** |
+| **F-Score** | **0.405** |

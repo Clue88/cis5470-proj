@@ -7,7 +7,7 @@ all: ${TARGETS}
 
 %: %.c
 	clang -emit-llvm -S -fno-discard-value-names -Xclang -disable-O0-optnone -c -o $@.ll $<
-	opt -load-pass-plugin=../build/DoubleFreePass.so -passes="DoubleFree" $@.ll -disable-output 2>&1 > $@.out | tee $@.err
+	opt -load-pass-plugin=../../build/UseAfterFreePass.so -passes="UseAfterFree" $@.ll -disable-output 2>&1 > $@.out | tee $@.err
 	@echo "\n"
 
 

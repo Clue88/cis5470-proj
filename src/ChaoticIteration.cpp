@@ -1,4 +1,5 @@
 #include "DoubleFreeAnalysis.h"
+#include "UseAfterFreeAnalysis.h"
 #include "Utils.h"
 
 namespace dataflow {
@@ -119,6 +120,31 @@ void DoubleFreeAnalysis::flowIn(Instruction* Inst, Memory* InMem) {
   }
 }
 
+void UseAfterFreeAnalysis::flowIn(Instruction* Inst, Memory* InMem) {
+  /**
+   * For each predecessor Pred of instruction Inst, do the following:
+   *   + Get the Out Memory of Pred using OutMap.
+   *   + Join the Out Memory with InMem.
+   */
+  InMem->clear();
+
+  for (auto* Pred : getPredecessors(Inst)) {
+    Memory* PredOut = OutMap[Pred];
+
+    if (InMem->empty()) {
+      for (const auto& kv : *PredOut) {
+        (*InMem)[kv.first] = new Domain(kv.second->Value);
+      }
+    } else {
+      Memory* Joined = join(InMem, PredOut);
+      InMem->clear();
+      for (const auto& kv : *Joined) {
+        (*InMem)[kv.first] = new Domain(kv.second->Value);
+      }
+    }
+  }
+}
+
 /**
  * @brief This function returns true if the two memories Mem1 and Mem2 are
  * equal.
@@ -198,7 +224,90 @@ void DoubleFreeAnalysis::flowOut(
   }
 }
 
+void UseAfterFreeAnalysis::flowOut(
+    Instruction* Inst, Memory* Pre, Memory* Post, SetVector<Instruction*>& WorkSet) {
+  /**
+   * For each given instruction, merge abstract domain from pre-transfer memory
+   * and post-transfer memory, and update the OutMap.
+   * If the OutMap changed then also update the WorkSet.
+   */
+  auto* OutNew = new Memory();
+
+  for (const auto& kv : *Pre) {
+    (*OutNew)[kv.first] = new Domain(kv.second->Value);
+  }
+
+  for (const auto& kv : *Post) {
+    (*OutNew)[kv.first] = new Domain(kv.second->Value);
+  }
+
+  Memory* OutOld = OutMap[Inst];
+  bool changed = !equal(OutOld, OutNew);
+
+  if (changed) {
+    OutOld->clear();
+    for (const auto& kv : *OutNew) {
+      (*OutOld)[kv.first] = new Domain(kv.second->Value);
+    }
+    for (auto* Succ : getSuccessors(Inst)) {
+      WorkSet.insert(Succ);
+    }
+  }
+}
+
 void DoubleFreeAnalysis::doAnalysis(Function& F, DoubleFreePointerAnalysis* PA) {
+  SetVector<Instruction*> WorkSet;
+  SetVector<Value*> PointerSet;
+  /**
+   * First, find the arguments of function call and instantiate abstract domain values
+   * for each argument.
+   * Initialize the WorkSet and PointerSet with all the instructions in the function.
+   * The rest of the implementation is almost similar to the previous lab.
+   *
+   * While the WorkSet is not empty:
+   * - Pop an instruction from the WorkSet.
+   * - Construct it's Incoming Memory using flowIn.
+   * - Evaluate the instruction using transfer and create the OutMemory.
+   *   Note that the transfer function takes two additional arguments compared to previous lab:
+   *   the DoubleFreePointerAnalysis object and the populated PointerSet.
+   * - Use flowOut along with the previous Out memory and the current Out
+   *   memory, to check if there is a difference between the two to update the
+   *   OutMap and add all successors to WorkSet.
+   */
+
+  for (auto& Arg : F.args()) {
+    if (Arg.getType()->isPointerTy()) {
+      PointerSet.insert(&Arg);
+    }
+  }
+
+  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    WorkSet.insert(&(*I));
+    PointerSet.insert(&(*I));
+  }
+
+  auto isEntryInst = [&](Instruction* Inst) { return getPredecessors(Inst).empty(); };
+
+  while (!WorkSet.empty()) {
+    Instruction* Inst = WorkSet.pop_back_val();
+
+    Memory* In = InMap[Inst];
+    flowIn(Inst, In);
+
+    if (isEntryInst(Inst)) {
+      for (auto& Arg : F.args()) {
+        (*In)[variable(&Arg)] = new Domain(Domain::Live);
+      }
+    }
+
+    Memory OutCur;
+    transfer(Inst, In, OutCur, PA, PointerSet);
+
+    flowOut(Inst, In, &OutCur, WorkSet);
+  }
+}
+
+void UseAfterFreeAnalysis::doAnalysis(Function& F, DoubleFreePointerAnalysis* PA) {
   SetVector<Instruction*> WorkSet;
   SetVector<Value*> PointerSet;
   /**

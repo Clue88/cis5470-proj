@@ -25,6 +25,15 @@ add_llvm_library(DoubleFreePass MODULE
   src/Utils.cpp
 )
 
+add_llvm_library(UseAfterFreePass MODULE
+  src/DoubleFreePointerAnalysis.cpp
+  src/UseAfterFreeAnalysis.cpp
+  src/Transfer.cpp
+  src/ChaoticIteration.cpp
+  src/Domain.cpp
+  src/Utils.cpp
+)
+
 add_llvm_library(PointerAnalysis MODULE
   src/PointerAnalysis.cpp
   src/Domain.cpp
