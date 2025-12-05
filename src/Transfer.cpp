@@ -46,7 +46,7 @@ Domain* evalCopyLike(Value* V, const Memory* InMem) {
 void DoubleFreeAnalysis::transfer(Instruction* Inst,
     const Memory* In,
     Memory& NOut,
-    PointerAnalysis* PA,
+    DoubleFreePointerAnalysis* PA,
     SetVector<Value*> PointerSet) {
   // Copy In into NOut as a default
   for (const auto& kv : *In) {

@@ -198,7 +198,7 @@ void DoubleFreeAnalysis::flowOut(
   }
 }
 
-void DoubleFreeAnalysis::doAnalysis(Function& F, PointerAnalysis* PA) {
+void DoubleFreeAnalysis::doAnalysis(Function& F, DoubleFreePointerAnalysis* PA) {
   SetVector<Instruction*> WorkSet;
   SetVector<Value*> PointerSet;
   /**
@@ -212,7 +212,7 @@ void DoubleFreeAnalysis::doAnalysis(Function& F, PointerAnalysis* PA) {
    * - Construct it's Incoming Memory using flowIn.
    * - Evaluate the instruction using transfer and create the OutMemory.
    *   Note that the transfer function takes two additional arguments compared to previous lab:
-   *   the PointerAnalysis object and the populated PointerSet.
+   *   the DoubleFreePointerAnalysis object and the populated PointerSet.
    * - Use flowOut along with the previous Out memory and the current Out
    *   memory, to check if there is a difference between the two to update the
    *   OutMap and add all successors to WorkSet.

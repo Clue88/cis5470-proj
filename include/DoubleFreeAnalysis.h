@@ -2,7 +2,7 @@
 #define DOUBLE_FREE_ANALYSIS_H
 
 #include "Domain.h"
-#include "PointerAnalysis.h"
+#include "DoubleFreePointerAnalysis.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
@@ -41,7 +41,7 @@ struct DoubleFreeAnalysis : public PassInfoMixin<DoubleFreeAnalysis> {
   void transfer(Instruction* I,
       const Memory* In,
       Memory& NOut,
-      PointerAnalysis* PA,
+      DoubleFreePointerAnalysis* PA,
       SetVector<Value*> PointerSet);
 
   /**
@@ -50,7 +50,7 @@ struct DoubleFreeAnalysis : public PassInfoMixin<DoubleFreeAnalysis> {
    *
    * @param F The function to be analyzed.
    */
-  void doAnalysis(Function& F, PointerAnalysis* PA);
+  void doAnalysis(Function& F, DoubleFreePointerAnalysis* PA);
 
   /**
    * @brief Flow the abstract domains from all predecessors of Inst into the In

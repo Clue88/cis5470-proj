@@ -1,4 +1,4 @@
-#include "PointerAnalysis.h"
+#include "DoubleFreePointerAnalysis.h"
 
 #include "Utils.h"
 #include "llvm/IR/InstIterator.h"
@@ -6,7 +6,7 @@
 
 namespace dataflow {
 
-void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
+void DoubleFreePointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
   if (AllocaInst* Alloca = dyn_cast<AllocaInst>(Inst)) {
     PointsToSet& S = PointsTo[variable(Alloca)];
     S.insert(address(Alloca));
@@ -84,14 +84,14 @@ void PointerAnalysis::transfer(Instruction* Inst, PointsToInfo& PointsTo) {
   }
 }
 
-int PointerAnalysis::countFacts(PointsToInfo& PointsTo) {
+int DoubleFreePointerAnalysis::countFacts(PointsToInfo& PointsTo) {
   int N = 0;
   for (auto& I : PointsTo)
     N += I.second.size();
   return N;
 }
 
-void PointerAnalysis::print(std::map<std::string, PointsToSet>& PointsTo) {
+void DoubleFreePointerAnalysis::print(std::map<std::string, PointsToSet>& PointsTo) {
   errs() << "Pointer Analysis Results:\n";
   for (auto& I : PointsTo) {
     errs() << "  " << I.first << ": { ";
@@ -103,7 +103,7 @@ void PointerAnalysis::print(std::map<std::string, PointsToSet>& PointsTo) {
   errs() << "\n";
 }
 
-PointerAnalysis::PointerAnalysis(Function& F) {
+DoubleFreePointerAnalysis::DoubleFreePointerAnalysis(Function& F) {
   int NumOfOldFacts = 0;
   int NumOfNewFacts = 0;
 
@@ -128,7 +128,7 @@ PointerAnalysis::PointerAnalysis(Function& F) {
   print(PointsTo);
 }
 
-bool PointerAnalysis::alias(std::string& Ptr1, std::string& Ptr2) const {
+bool DoubleFreePointerAnalysis::alias(std::string& Ptr1, std::string& Ptr2) const {
   if (PointsTo.find(Ptr1) == PointsTo.end() || PointsTo.find(Ptr2) == PointsTo.end())
     return false;
   const PointsToSet& S1 = PointsTo.at(Ptr1);

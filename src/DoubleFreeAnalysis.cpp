@@ -70,7 +70,7 @@ PreservedAnalyses DoubleFreeAnalysis::run(Module& M, ModuleAnalysisManager& AM) 
     }
 
     // The chaotic iteration algorithm is implemented inside doAnalysis().
-    auto PA = new PointerAnalysis(F);
+    auto PA = new DoubleFreePointerAnalysis(F);
     doAnalysis(F, PA);
 
     // Check each instruction in function F for potential divide-by-zero error.

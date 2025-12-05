@@ -17,7 +17,7 @@ link_directories(${LLVM_LIBRARY_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
 
 add_llvm_library(DoubleFreePass MODULE
-  src/PointerAnalysis.cpp
+  src/DoubleFreePointerAnalysis.cpp
   src/DoubleFreeAnalysis.cpp
   src/Transfer.cpp
   src/ChaoticIteration.cpp
@@ -25,15 +25,15 @@ add_llvm_library(DoubleFreePass MODULE
   src/Utils.cpp
 )
 
-add_llvm_library(PointerAnalysis MODULE
-  src/PointerAnalysis.cpp
-  src/Domain.cpp
-  src/Utils.cpp
-)
+# add_llvm_library(PointerAnalysis MODULE
+#   src/PointerAnalysis.cpp
+#   src/Domain.cpp
+#   src/Utils.cpp
+# )
 
-add_llvm_library(NullPointerAnalysis MODULE
-  src/NullPointerAnalysis.cpp
-  src/NullPointerAnalysisPass.cpp
-  src/Domain.cpp
-  src/Utils.cpp
-)
+# add_llvm_library(NullPointerAnalysis MODULE
+#   src/NullPointerAnalysis.cpp
+#   src/NullPointerAnalysisPass.cpp
+#   src/Domain.cpp
+#   src/Utils.cpp
+# )
