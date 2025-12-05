@@ -73,27 +73,22 @@ $ make all
 The results are stored in `.out` files in the test directory.
 
 ### Juliet Testbench
-The Juliet Test Suite is a large collection of synthetic C/C++ programs created by NIST to evaluate
-static and dynamic analysis tools. Each file contains one or more functions labeled as good (safe)
-or bad (contains a known vulnerability), allowing tools to be tested for true positives, false
-positives, and false negatives.
-
-For CWE-415, there are 1266 test cases, which can be run using `make` and evaluated using a Python
+For CWE-416, there are 312 test cases, which can be run using `make` and evaluated using a Python
 script:
 ```bash
-$ cd juliet/CWE415_Double_Free
+$ cd juliet/CWE416_Use_After_Free
 $ make all
 $ python3 eval.py
 ```
 
-The current results are as follows (n = 1266, with 496 bad programs and 770 good programs):
+The current results are as follows (n = 312, with 150 bad programs and 162 good programs):
 
 | Metric | Value |
 | ------ | ----- |
-| True Positives (bad programs, rejected) | 126 |
-| False Negatives (bad programs, accepted) | 370 |
+| True Positives (bad programs, rejected) | 108 |
+| False Negatives (bad programs, accepted) | 42 |
 | False Positives (good programs, rejected) | 0 |
-| True Negatives (good programs, accepted) | 770 |
+| True Negatives (good programs, accepted) | 162 |
 | **Precision** | **1.000** |
-| **Recall** | **0.254** |
-| **F-Score** | **0.405** |
+| **Recall** | **0.720** |
+| **F-Score** | **0.837** |
