@@ -104,9 +104,11 @@ def main():
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1_score = 2 * (precision * recall) / (precision + recall)
 
     print(f"\nPrecision: {precision:.3f}")
     print(f"Recall:    {recall:.3f}")
+    print(f"F1-Score:  {f1_score:.3f}")
 
     if examples_tp:
         print("\nExample TPs:")
