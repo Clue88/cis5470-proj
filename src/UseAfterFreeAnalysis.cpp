@@ -22,7 +22,7 @@ bool UseAfterFreeAnalysis::check(Instruction* Inst) {
     Value* Ptr = Load->getPointerOperand();
     Domain* D = getOrExtract(In, Ptr);
 
-    return (D->Value == Domain::Freed || D->Value == Domain::MaybeFreed);
+    return (D->Value != Domain::Live);
   }
 
   // Check for storing a value to a freed pointer
@@ -30,7 +30,7 @@ bool UseAfterFreeAnalysis::check(Instruction* Inst) {
     Value* Ptr = Store->getPointerOperand();
     Domain* D = getOrExtract(In, Ptr);
 
-    return (D->Value == Domain::Freed || D->Value == Domain::MaybeFreed);
+    return (D->Value != Domain::Live);
   }
 
   // Check for call instruction with freed pointer argument
@@ -44,7 +44,7 @@ bool UseAfterFreeAnalysis::check(Instruction* Inst) {
 
       Domain* D = getOrExtract(In, Arg);
 
-      if (D->Value == Domain::Freed || D->Value == Domain::MaybeFreed) {
+      if (D->Value != Domain::Live) {
         return true;
       }
     }
