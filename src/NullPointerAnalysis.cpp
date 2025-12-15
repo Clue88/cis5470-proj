@@ -1,4 +1,5 @@
 #include "Domain.h"
+#include <queue>
 #include "PointerAnalysis.h"
 #include "Utils.h"
 #include "llvm/IR/Constants.h"
@@ -177,6 +178,122 @@ Domain::NullState PointerAnalysis::computeNullState(const std::string& var,
     return dataflow::Domain::Unknown;
 }
 
+
+// Analyze null-check branches and populate GuardedNotNull map
+// Detects patterns like: if (ptr != null) { use ptr }
+void PointerAnalysis::analyzeNullGuards(Function& F) {
+    // Map from memory location (alloca) to guarded blocks
+    std::map<std::string, std::set<BasicBlock*>> MemLocGuardedBlocks;
+
+    for (auto& BB : F) {
+        auto* Term = BB.getTerminator();
+        auto* BI = dyn_cast<BranchInst>(Term);
+        if (!BI || !BI->isConditional()) continue;
+
+        Value* Cond = BI->getCondition();
+        auto* Cmp = dyn_cast<ICmpInst>(Cond);
+        if (!Cmp) continue;
+
+        Value* LHS = Cmp->getOperand(0);
+        Value* RHS = Cmp->getOperand(1);
+
+        // Check for ptr != null or ptr == null patterns
+        Value* PtrOp = nullptr;
+        if (isa<ConstantPointerNull>(RHS) && LHS->getType()->isPointerTy()) {
+            PtrOp = LHS;
+        } else if (isa<ConstantPointerNull>(LHS) && RHS->getType()->isPointerTy()) {
+            PtrOp = RHS;
+        }
+        if (!PtrOp) continue;
+
+        BasicBlock* NotNullBB = nullptr;
+        if (Cmp->getPredicate() == ICmpInst::ICMP_NE) {
+            NotNullBB = BI->getSuccessor(0);  // true branch
+        } else if (Cmp->getPredicate() == ICmpInst::ICMP_EQ) {
+            NotNullBB = BI->getSuccessor(1);  // false branch
+        }
+        if (!NotNullBB) continue;
+
+        std::string guardedVar = variable(PtrOp);
+        GuardedNotNull[NotNullBB].insert(guardedVar);
+
+        // Track memory location for loads
+        if (auto* Load = dyn_cast<LoadInst>(PtrOp)) {
+            Value* LoadPtr = Load->getPointerOperand();
+            std::string memLoc = variable(LoadPtr);
+            MemLocGuardedBlocks[memLoc].insert(NotNullBB);
+        }
+
+        // Propagate to single-predecessor successors
+        std::queue<BasicBlock*> Worklist;
+        Worklist.push(NotNullBB);
+        std::set<BasicBlock*> Visited;
+        Visited.insert(NotNullBB);
+
+        while (!Worklist.empty()) {
+            BasicBlock* Curr = Worklist.front();
+            Worklist.pop();
+            for (BasicBlock* Succ : successors(Curr)) {
+                if (Succ->hasNPredecessors(1) && Visited.find(Succ) == Visited.end()) {
+                    for (const auto& g : GuardedNotNull[Curr]) {
+                        GuardedNotNull[Succ].insert(g);
+                    }
+                    if (auto* Load = dyn_cast<LoadInst>(PtrOp)) {
+                        Value* LoadPtr = Load->getPointerOperand();
+                        std::string memLoc = variable(LoadPtr);
+                        MemLocGuardedBlocks[memLoc].insert(Succ);
+                    }
+                    Visited.insert(Succ);
+                    Worklist.push(Succ);
+                }
+            }
+        }
+    }
+
+    // For each load, if from guarded memory location in guarded block, mark result guarded
+    for (auto& BB : F) {
+        for (auto& I : BB) {
+            if (auto* Load = dyn_cast<LoadInst>(&I)) {
+                if (!Load->getType()->isPointerTy()) continue;
+                Value* LoadPtr = Load->getPointerOperand();
+                std::string memLoc = variable(LoadPtr);
+                auto it = MemLocGuardedBlocks.find(memLoc);
+                if (it != MemLocGuardedBlocks.end()) {
+                    if (it->second.find(&BB) != it->second.end()) {
+                        GuardedNotNull[&BB].insert(variable(Load));
+                    }
+                }
+            }
+            if (auto* GEP = dyn_cast<GetElementPtrInst>(&I)) {
+                Value* BasePtr = GEP->getPointerOperand();
+                std::string baseVar = variable(BasePtr);
+                if (GuardedNotNull[&BB].find(baseVar) != GuardedNotNull[&BB].end()) {
+                    GuardedNotNull[&BB].insert(variable(GEP));
+                }
+            }
+        }
+    }
+}
+
+bool PointerAnalysis::isGuardedNotNull(const std::string& ptrVar, Instruction* Inst) {
+    BasicBlock* BB = Inst->getParent();
+    auto it = GuardedNotNull.find(BB);
+    if (it == GuardedNotNull.end()) return false;
+
+    if (it->second.find(ptrVar) != it->second.end()) return true;
+
+    if (auto* GEP = dyn_cast<GetElementPtrInst>(Inst)) {
+        Value* BasePtr = GEP->getPointerOperand();
+        std::string baseVar = variable(BasePtr);
+        if (it->second.find(baseVar) != it->second.end()) return true;
+    } else if (auto* Load = dyn_cast<LoadInst>(Inst)) {
+        Value* Ptr = Load->getPointerOperand();
+        std::string loadPtrVar = variable(Ptr);
+        if (it->second.find(loadPtrVar) != it->second.end()) return true;
+    }
+    return false;
+}
+
 void PointerAnalysis::print(std::map<std::string, PointsToSet>& PointsTo) {
     errs() << "Pointer Analysis Results:\n";
     for (auto& I : PointsTo) {
@@ -266,6 +383,10 @@ PointerAnalysis::PointerAnalysis(Function& F) {
         errs() << "\n";
     }
 
+
+    // Analyze null guards (short-circuit evaluation patterns)
+    analyzeNullGuards(F);
+
     // Post-check: iterate instructions again and emit warnings based on the
     // final PointsTo sets (more reliable than checking during transfer).
     for (inst_iterator Iter = inst_begin(F), E = inst_end(F); Iter != E;
@@ -274,7 +395,7 @@ PointerAnalysis::PointerAnalysis(Function& F) {
         if (StoreInst* Store = dyn_cast<StoreInst>(Inst)) {
             Value* Pointer = Store->getPointerOperand();
             auto it = NullStates.find(variable(Pointer));
-            if (it != NullStates.end() && (it->second == Domain::Null ||
+            if (it != NullStates.end() && !isGuardedNotNull(variable(Pointer), Inst) && (it->second == Domain::Null ||
                                            it->second == Domain::MaybeNull)) {
                 errs() << "Possible null dereference (store) in " << FuncName
                        << " at: " << *Store << "\n";
@@ -282,7 +403,7 @@ PointerAnalysis::PointerAnalysis(Function& F) {
         } else if (LoadInst* Load = dyn_cast<LoadInst>(Inst)) {
             Value* Pointer = Load->getPointerOperand();
             auto it = NullStates.find(variable(Pointer));
-            if (it != NullStates.end() && (it->second == Domain::Null ||
+            if (it != NullStates.end() && !isGuardedNotNull(variable(Pointer), Inst) && (it->second == Domain::Null ||
                                            it->second == Domain::MaybeNull)) {
                 errs() << "Possible null dereference (load) in " << FuncName
                        << " at: " << *Load << "\n";
@@ -292,7 +413,7 @@ PointerAnalysis::PointerAnalysis(Function& F) {
             // access memory)
             Value* Pointer = GEP->getPointerOperand();
             auto it = NullStates.find(variable(Pointer));
-            if (it != NullStates.end() && (it->second == Domain::Null ||
+            if (it != NullStates.end() && !isGuardedNotNull(variable(Pointer), Inst) && (it->second == Domain::Null ||
                                            it->second == Domain::MaybeNull)) {
                 errs() << "Possible null dereference (getelementptr) in "
                        << FuncName << " at: " << *GEP << "\n";

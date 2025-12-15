@@ -1,8 +1,8 @@
 MAKEFLAGS += --no-builtin-rules
 
 PASS_ROOT ?= ../..
-# Default to the plugin that the project builds: build/PointerAnalysis.so
-PASS_SO   ?= $(PASS_ROOT)/build/PointerAnalysis.so
+# Default to the plugin that the project builds: build/NullPointerAnalysis.so
+PASS_SO   ?= $(PASS_ROOT)/build/NullPointerAnalysis.so
 
 SUPPORT_DIR ?= ../testcasesupport
 
@@ -40,8 +40,8 @@ all: $(OUT)
 	clang++ $(CXXFLAGS) -c -o $@ $<
 
 %.out: %.ll
-	@echo "== opt + PointerAnalysis on $< =="
-	opt -load-pass-plugin=$(PASS_SO) -passes="PointerAnalysis" $< -disable-output \
+	@echo "== opt + NullPointerAnalysis on $< =="
+	opt -load-pass-plugin=$(PASS_SO) -passes="NullPointerAnalysis" $< -disable-output \
 	  > $@ 2>$(patsubst %.out,%.err,$@)
 	@echo
 
