@@ -42,13 +42,13 @@ The current results are as follows (n = 1266, with 496 bad programs and 770 good
 
 | Metric | Value |
 | ------ | ----- |
-| True Positives (bad programs, rejected) | 126 |
-| False Negatives (bad programs, accepted) | 370 |
-| False Positives (good programs, rejected) | 0 |
-| True Negatives (good programs, accepted) | 770 |
-| **Precision** | **1.000** |
-| **Recall** | **0.254** |
-| **F-Score** | **0.405** |
+| True Positives (bad programs, rejected) | 246 |
+| False Negatives (bad programs, accepted) | 250 |
+| False Positives (good programs, rejected) | 108 |
+| True Negatives (good programs, accepted) | 662 |
+| **Precision** | **0.695** |
+| **Recall** | **0.496** |
+| **F-Score** | **0.579** |
 
 ## Use-After-Free (CWE-416) Analysis
 Use-after-free detection was done using dataflow and pointer analysis, similar to double free
@@ -85,10 +85,10 @@ The current results are as follows (n = 312, with 150 bad programs and 162 good 
 
 | Metric | Value |
 | ------ | ----- |
-| True Positives (bad programs, rejected) | 108 |
-| False Negatives (bad programs, accepted) | 42 |
-| False Positives (good programs, rejected) | 0 |
-| True Negatives (good programs, accepted) | 162 |
-| **Precision** | **1.000** |
-| **Recall** | **0.720** |
-| **F-Score** | **0.837** |
+| True Positives (bad programs, rejected) | 150 |
+| False Negatives (bad programs, accepted) | 0 |
+| False Positives (good programs, rejected) | 24 |
+| True Negatives (good programs, accepted) | 138 |
+| **Precision** | **0.862** |
+| **Recall** | **1.000** |
+| **F-Score** | **0.925** |

@@ -44,7 +44,7 @@ bool DoubleFreeAnalysis::check(Instruction* Inst) {
     return false;
   }
 
-  return (D->Value == Domain::Freed || D->Value == Domain::MaybeFreed);
+  return D->Value != Domain::Live;
 }
 
 const auto PASS_NAME = "DoubleFree";

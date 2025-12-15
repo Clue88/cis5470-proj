@@ -296,7 +296,7 @@ void DoubleFreeAnalysis::doAnalysis(Function& F, DoubleFreePointerAnalysis* PA) 
 
     if (isEntryInst(Inst)) {
       for (auto& Arg : F.args()) {
-        (*In)[variable(&Arg)] = new Domain(Domain::Live);
+        (*In)[variable(&Arg)] = new Domain(Domain::MaybeFreed);
       }
     }
 
